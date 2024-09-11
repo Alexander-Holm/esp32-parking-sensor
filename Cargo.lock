@@ -723,6 +723,7 @@ dependencies = [
 name = "ultrasonic-distance-buzzer"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal",
  "esp-backtrace",
  "esp-hal",
  "esp-println",
