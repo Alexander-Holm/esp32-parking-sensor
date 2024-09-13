@@ -34,6 +34,13 @@
         "top": 24,
         "left": 196.8,
         "attrs": { "color": "BCYR" }
+      },
+      {
+        "type": "wokwi-buzzer",
+        "id": "bz1",
+        "top": 2.4,
+        "left": -151.8,
+        "attrs": { "volume": "0.1", "mode": "smooth" }
       }
     ],
     "connections": [
@@ -76,7 +83,9 @@
       [ "bargraph1:A1", "sr1:Q1", "green", [ "h0", "v-9.6" ] ],
       [ "esp:7", "sr2:DS", "blue", [ "v26.38", "h115.2", "v-28.8" ] ],
       [ "esp:9", "sr1:SHCP", "orange", [ "v7.18", "h67.2", "v-124.8" ] ],
-      [ "esp:8", "sr1:STCP", "#8f4814", [ "v16.78", "h86.4", "v-124.8" ] ]
+      [ "esp:8", "sr1:STCP", "#8f4814", [ "v16.78", "h86.4", "v-124.8" ] ],
+      [ "bz1:2", "esp:4", "green", [ "v9.6", "h86" ] ],
+      [ "esp:GND.6", "bz1:1", "black", [ "h0", "v16.78", "h-57.6" ] ]
     ],
     "serialMonitor": { "display": "terminal", "convertEol": true },
     "dependencies": {}

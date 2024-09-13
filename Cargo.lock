@@ -727,6 +727,7 @@ dependencies = [
  "esp-backtrace",
  "esp-hal",
  "esp-println",
+ "fugit",
  "log",
 ]
 
