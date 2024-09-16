@@ -1,19 +1,17 @@
 use embedded_hal::pwm::SetDutyCycle;
 use fugit::Rate;
 use esp_hal::{
-    peripheral::Peripheral,
-    gpio::OutputPin, 
-    ledc::{
+    gpio::OutputPin, ledc::{
         channel::{ self, config::PinConfig, Channel, ChannelIFace }, 
         timer::{ self, config::Duty, LSClockSource, Timer, TimerIFace }, 
         LowSpeed
-    }
+    }, peripheral::Peripheral 
 };
 
 
 pub struct Buzzer<'a, Pin: OutputPin + Peripheral<P = Pin>>{
     channel: Channel<'a, LowSpeed, Pin>,
-    is_on: bool
+    pub is_on: bool
 }
 impl <'a, Pin: OutputPin + Peripheral<P = Pin>> Buzzer<'a, Pin>{
     pub fn new(
@@ -33,11 +31,6 @@ impl <'a, Pin: OutputPin + Peripheral<P = Pin>> Buzzer<'a, Pin>{
             pin_config: PinConfig::PushPull
         }).unwrap();
         return Self { channel, is_on: false }
-    }
-
-    pub fn toggle(&mut self){
-        if self.is_on { self.set_off() }
-        else { self.set_on() }
     }
     pub fn set_on(&mut self){
         self.channel.set_duty_cycle_percent(50).unwrap();
