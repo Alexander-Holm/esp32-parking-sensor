@@ -1,16 +1,16 @@
 use embedded_hal::digital::{ OutputPin, InputPin };
 use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
-use esp_hal::timer::Timer as TimerTrait;
+use esp_hal::timer::Timer;
 
 pub struct UltrasonicDistanceSensor<'lifetime, TrigPin: OutputPin, EchoPin: InputPin>{
     trig: TrigPin,
     echo: EchoPin,
-    timer: &'lifetime dyn TimerTrait,
+    timer: &'lifetime dyn Timer,
     delay: Delay
 }
 impl <'lifetime, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'lifetime, TrigPin, EchoPin>{
-    pub fn new(trig: TrigPin, echo: EchoPin, clocks: &Clocks, timer: &'lifetime dyn TimerTrait) -> Self{
+    pub fn new(trig: TrigPin, echo: EchoPin, clocks: &Clocks, timer: &'lifetime dyn Timer) -> Self{
         let delay = Delay::new(&clocks);
         return UltrasonicDistanceSensor{ trig, echo, timer, delay};
     }
