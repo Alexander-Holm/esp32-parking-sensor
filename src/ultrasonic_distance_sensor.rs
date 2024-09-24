@@ -2,8 +2,8 @@ use embedded_hal::digital::{ OutputPin, InputPin };
 use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
 use fugit::Instant;
-
 use crate::simple_timer::SimpleTimer;
+
 
 #[derive(PartialEq, Eq)]
 pub enum SensorState {
@@ -11,6 +11,7 @@ pub enum SensorState {
     NotStarted,
     AboveMaxDistance
 }
+
 
 pub struct UltrasonicDistanceSensor<'a, TrigPin: OutputPin, EchoPin: InputPin>{
     delay: Delay,
@@ -41,6 +42,9 @@ impl <'a, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'a, Tr
         if self.echo_start == None{
             return Err(SensorState::NotStarted);
         }
+        // Att vänta på att "echo" blir LOW kan ta lång tid för stora avstånd.
+        // Genom att returnera Err() direkt när avståndet är större än max
+        // går det att starta en ny mätning tidigare.
         let now = self.timer.now();
         let elapsed_microseconds = now.checked_duration_since(self.echo_start.unwrap()).unwrap();
         let centimeters = elapsed_microseconds.to_micros() / 58;
@@ -50,15 +54,15 @@ impl <'a, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'a, Tr
                 self.echo_start = None;
                 return Err(SensorState::AboveMaxDistance);
             }
-            else { 
-                return Err(SensorState::Measuring);
-            }
+            return Err(SensorState::Measuring);
         }
         self.last_reading = Some(centimeters);
         self.echo_start = None;
         return Ok(centimeters);
     }
 
+    // read_distance sätter self.last_reading till None
+    // om distance är större än max
     pub fn last_reading(&self) -> Option<u64> {
         return self.last_reading;
     }

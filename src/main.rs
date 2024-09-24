@@ -22,7 +22,7 @@ use buzzer::Buzzer;
 mod simple_timer;
 use simple_timer::SimpleTimer;
 
-
+// u64 för att matcha typer från esp_hal
 const MAX_DISTANCE:u64 = 200;
 const LED_COUNT: u64 = 10;
 const SENSOR_POLLING_RATE_MS: u64 = 100;
@@ -54,6 +54,9 @@ fn main() -> ! {
         Output::new(pins.gpio8, Level::Low)
     );
     
+    // Det går inte att lägga in pwm-objekten i Buzzer eller en egen klass.
+    // De behöver hålla referenser till varandra, se configure() funktionerna i Buzzer::new().
+    // Rust tycker inte om self-referential structs.
     let mut pwm_controller = Ledc::new(peripherals.LEDC, &clocks);
     pwm_controller.set_global_slow_clock(LSGlobalClkSource::APBClk);
     let mut pwm_timer: Timer<LowSpeed> = pwm_controller.get_timer(ledc::timer::Number::Timer0);
@@ -65,7 +68,12 @@ fn main() -> ! {
     );
 
     
-    loop {
+    // TODO:
+    // Loopen behöver inte köras hela tiden.
+    // Kan lägga till en funktion i SimpleTimer för att se hur långt det är kvar.
+    // Kolla hur lång tid det är kvar på sensorn och buzzern,
+    // sätt sedan delay till det lägsta värdet.
+    loop {        
         match distance_sensor.read_distance() {            
             Ok(distance) => {
                 distance_sensor.timer.start(SENSOR_POLLING_RATE_MS.millis());
@@ -92,15 +100,16 @@ fn main() -> ! {
         }
 
         if buzzer.timer.is_done(){
-            if buzzer.is_on(){
-                buzzer.set_off();
-                if let Some(distance) = distance_sensor.last_reading() {
-                    buzzer.timer.start(buzzer_off_interval(distance));
+            if buzzer.is_on() { buzzer.set_off() }
+            // last_reading är None om den var över max.
+            if let Some(distance) = distance_sensor.last_reading() {
+                match buzzer.is_on() {
+                    true => { buzzer.timer.start(buzzer_off_interval(distance)) }
+                    false => { 
+                        buzzer.set_on();
+                        buzzer.timer.start(60.millis());
+                    }
                 }
-            }
-            else if distance_sensor.last_reading().is_some(){
-                buzzer.set_on();
-                buzzer.timer.start(60.millis());
             }
         }
     }    
