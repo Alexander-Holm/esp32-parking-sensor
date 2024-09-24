@@ -22,9 +22,11 @@ use buzzer::Buzzer;
 mod simple_timer;
 use simple_timer::SimpleTimer;
 
+
 const MAX_DISTANCE:u64 = 200;
 const LED_COUNT: u64 = 10;
-const SENSOR_POLLING_RATE_MS: u64 = 100; 
+const SENSOR_POLLING_RATE_MS: u64 = 100;
+fn buzzer_off_interval(distance: u64) -> MicrosDurationU64 { (distance * 5).millis() }
 
 
 #[entry]
@@ -102,8 +104,4 @@ fn main() -> ! {
             }
         }
     }    
-}
-
-fn buzzer_off_interval(distance: u64) -> MicrosDurationU64 {
-    return (distance * 5).millis();
 }
