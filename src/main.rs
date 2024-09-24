@@ -3,18 +3,28 @@
 
 use esp_backtrace as _;
 use esp_hal::{
-    clock::ClockControl, delay::Delay, gpio::{ Input, Io, Level, Output, Pull }, ledc::{ self, timer::Timer, LSGlobalClkSource, Ledc, LowSpeed}, peripherals::Peripherals, prelude::*, system::SystemControl, timer::{timg::TimerGroup, PeriodicTimer}
+    clock::ClockControl, 
+    gpio::{ Input, Io, Level, Output, Pull },
+    ledc::{ self, timer::Timer, LSGlobalClkSource, Ledc, LowSpeed }, 
+    peripherals::Peripherals, 
+    prelude::*, 
+    system::SystemControl, 
+    timer::timg::TimerGroup,
 };
 use esp_println::logger;
 mod led_bar;
+use fugit::MicrosDurationU64;
 use led_bar::LedBar;
 mod ultrasonic_distance_sensor;
-use ultrasonic_distance_sensor::UltrasonicDistanceSensor;
+use ultrasonic_distance_sensor::{SensorState, UltrasonicDistanceSensor};
 mod buzzer;
 use buzzer::Buzzer;
+mod simple_timer;
+use simple_timer::SimpleTimer;
 
-const MAX_DISTANCE:u64 = 150;
+const MAX_DISTANCE:u64 = 200;
 const LED_COUNT: u64 = 10;
+const SENSOR_POLLING_RATE_MS: u64 = 100; 
 
 
 #[entry]
@@ -24,18 +34,15 @@ fn main() -> ! {
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
     let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
-    let delay = Delay::new(&clocks);
     let pins = Io::new(peripherals.GPIO, peripherals.IO_MUX).pins;
-
-    let timg0 = TimerGroup::new(peripherals.TIMG0, &clocks);
-    let timg1 = TimerGroup::new(peripherals.TIMG1, &clocks);
-    let sensor_timer = timg0.timer0;
-    let mut buzzer_timer = PeriodicTimer::new(timg1.timer0);
+    let timer = TimerGroup::new(peripherals.TIMG0, &clocks).timer0;
     
     let mut distance_sensor = UltrasonicDistanceSensor::new(
+        MAX_DISTANCE,
         Output::new(pins.gpio1, Level::Low),
         Input::new(pins.gpio0, Pull::Down), 
-        &clocks, &sensor_timer
+        SimpleTimer::new(&timer),
+        &clocks,
     );
 
     let mut led_bar = LedBar::new(
@@ -49,41 +56,54 @@ fn main() -> ! {
     pwm_controller.set_global_slow_clock(LSGlobalClkSource::APBClk);
     let mut pwm_timer: Timer<LowSpeed> = pwm_controller.get_timer(ledc::timer::Number::Timer0);
     let pwm_channel = pwm_controller.get_channel(ledc::channel::Number::Channel0, pins.gpio4);
-    let mut buzzer = Buzzer::new(400.Hz(), pwm_channel, &mut pwm_timer);
+    let mut buzzer = Buzzer::new(
+        500.Hz(),
+        SimpleTimer::new(&timer), 
+        pwm_channel, &mut pwm_timer
+    );
 
-    let mut current_distance: u64 = 0;
-    // Måste startat timern för att första loopen ska köras korrekt
-    buzzer_timer.start(0.micros()).unwrap();
     
     loop {
-        let buzzer_timer_is_done = buzzer_timer.wait() == Ok(());
-        if
-        !buzzer.is_on &&
-        buzzer_timer_is_done
-        {
-            current_distance = distance_sensor.get_distance_cm();
-            if current_distance < MAX_DISTANCE{
-                let decimal_of_max = current_distance / (MAX_DISTANCE / LED_COUNT);
-                let lit_led_count = LED_COUNT - decimal_of_max;
+        match distance_sensor.read_distance() {            
+            Ok(distance) => {
+                distance_sensor.timer.start(SENSOR_POLLING_RATE_MS.millis());
+                let lit_led_count = LED_COUNT - (distance / (MAX_DISTANCE / LED_COUNT));
                 led_bar.light_leds(lit_led_count as u8);
-                buzzer.set_on();
-                buzzer_timer.start(60.millis()).unwrap();
-            }
-            else { 
-                if led_bar.get_lit_count() > 0{
-                    led_bar.light_leds(0);
+                if !buzzer.is_on() && !buzzer.timer.is_done() {
+                    buzzer.timer.update_duration(buzzer_off_interval(distance));
                 }
-                delay.delay_millis(100); 
+            }
+            Err(state) => match state {
+                SensorState::NotStarted => {
+                    if distance_sensor.timer.is_done(){
+                        distance_sensor.start_measurement();
+                    }
+                }
+                SensorState::AboveMaxDistance => {
+                    distance_sensor.timer.start(SENSOR_POLLING_RATE_MS.millis());
+                    if led_bar.get_lit_count() > 0 {
+                        led_bar.light_leds(0);
+                    }
+                }
+                SensorState::Measuring => {}
             }
         }
 
-        else if 
-        buzzer.is_on &&
-        buzzer_timer_is_done
-        {
-            buzzer.set_off();
-            let buzzer_off_interval = current_distance * 5;
-            buzzer_timer.start(buzzer_off_interval.millis()).unwrap();
+        if buzzer.timer.is_done(){
+            if buzzer.is_on(){
+                buzzer.set_off();
+                if let Some(distance) = distance_sensor.last_reading() {
+                    buzzer.timer.start(buzzer_off_interval(distance));
+                }
+            }
+            else if distance_sensor.last_reading().is_some(){
+                buzzer.set_on();
+                buzzer.timer.start(60.millis());
+            }
         }
     }    
+}
+
+fn buzzer_off_interval(distance: u64) -> MicrosDurationU64 {
+    return (distance * 5).millis();
 }

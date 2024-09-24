@@ -1,49 +1,65 @@
 use embedded_hal::digital::{ OutputPin, InputPin };
 use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
-use esp_hal::timer::Timer;
+use fugit::Instant;
 
-pub struct UltrasonicDistanceSensor<'lifetime, TrigPin: OutputPin, EchoPin: InputPin>{
+use crate::simple_timer::SimpleTimer;
+
+#[derive(PartialEq, Eq)]
+pub enum SensorState {
+    Measuring,
+    NotStarted,
+    AboveMaxDistance
+}
+
+pub struct UltrasonicDistanceSensor<'a, TrigPin: OutputPin, EchoPin: InputPin>{
+    delay: Delay,
     trig: TrigPin,
     echo: EchoPin,
-    timer: &'lifetime dyn Timer,
-    delay: Delay
+    echo_start: Option< Instant<u64, 1, 1_000_000> >,
+    last_reading: Option<u64>,
+    max_distance: u64,
+    pub timer: SimpleTimer<'a>,
 }
-impl <'lifetime, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'lifetime, TrigPin, EchoPin>{
-    pub fn new(trig: TrigPin, echo: EchoPin, clocks: &Clocks, timer: &'lifetime dyn Timer) -> Self{
+
+impl <'a, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'a, TrigPin, EchoPin>{
+    pub fn new(max_distance: u64, trig: TrigPin, echo: EchoPin, timer: SimpleTimer<'a>, clocks: &Clocks) -> Self{
         let delay = Delay::new(&clocks);
-        return UltrasonicDistanceSensor{ trig, echo, timer, delay};
-    }
-    pub fn get_distance_cm(&mut self) -> u64{
-        self.start_measurement();
-        let microseconds = self.count_echo_length();
-        let centimeters = self.calculate_distance_cm(microseconds);
-        return centimeters;
-
+        return UltrasonicDistanceSensor{ max_distance, trig, echo, timer, delay, echo_start: None, last_reading: None };
     }
 
-    // Private methods
-
-    fn start_measurement(&mut self){
+    pub fn start_measurement(&mut self){
         self.trig.set_high().unwrap();
         self.delay.delay_micros(10);
         self.trig.set_low().unwrap();
-    }    
-    fn count_echo_length(&mut self) -> u64 {
-        // Vänta på att echo blir HIGH.
-        // Skulle kunna ha litet delay i loopen för att spara energi
+        // Blocking, ok för det är väldigt kort tid
         while self.echo.is_low().unwrap() {}
-        // echo är HIGH så starta timern
-        let start_timestamp = self.timer.now();
-        while self.echo.is_high().unwrap() {}
-        let end_timestamp = self.timer.now();    
-        let elapsed_duration = end_timestamp.checked_duration_since(start_timestamp).unwrap();
-        return elapsed_duration.to_micros();
-    }    
-    fn calculate_distance_cm(&self, microseconds: u64) -> u64 {
-        // Blir något längre avstånd än vad som väljs i Wokwi simulatorn.
-        // Andra projekt jag hittar har samma problem.
-        // T.ex: 400 -> 405,    300 -> 304,     200 -> 202,     100 -> 101
-        return microseconds / 58;
+        self.echo_start = Some(self.timer.now());
+    }
+
+    pub fn read_distance(&mut self) -> Result<u64, SensorState> {
+        if self.echo_start == None{
+            return Err(SensorState::NotStarted);
+        }
+        let now = self.timer.now();
+        let elapsed_microseconds = now.checked_duration_since(self.echo_start.unwrap()).unwrap();
+        let centimeters = elapsed_microseconds.to_micros() / 58;
+        if self.echo.is_high().unwrap() {
+            if centimeters > self.max_distance {
+                self.last_reading = None;
+                self.echo_start = None;
+                return Err(SensorState::AboveMaxDistance);
+            }
+            else { 
+                return Err(SensorState::Measuring);
+            }
+        }
+        self.last_reading = Some(centimeters);
+        self.echo_start = None;
+        return Ok(centimeters);
+    }
+
+    pub fn last_reading(&self) -> Option<u64> {
+        return self.last_reading;
     }
 }
