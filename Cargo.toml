@@ -1,9 +1,9 @@
 [package]
-name = "ultrasonic-distance-buzzer"
-version = "0.1.0"
+name = "esp32-parking-sensor"
+version = "0.0.0"
 authors = ["Alexander Holm <alex.holm@live.com>"]
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 [dependencies]
 esp-backtrace = { version = "0.14.0", features = [
