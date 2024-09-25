@@ -98,19 +98,22 @@ fn main() -> ! {
                 SensorState::Measuring => {}
             }
         }
-
         if buzzer.timer.is_done(){
-            if buzzer.is_on() { buzzer.set_off() }
             // last_reading är None om den var över max.
             if let Some(distance) = distance_sensor.last_reading() {
                 match buzzer.is_on() {
-                    true => { buzzer.timer.start(buzzer_off_interval(distance)) }
+                    true => { 
+                        buzzer.set_off();
+                        buzzer.timer.start(buzzer_off_interval(distance)) 
+                    }
                     false => { 
                         buzzer.set_on();
                         buzzer.timer.start(60.millis());
                     }
                 }
             }
+            // last_reading är över max så buzzern ska stängas av
+            else if buzzer.is_on() { buzzer.set_off() }
         }
     }    
 }
