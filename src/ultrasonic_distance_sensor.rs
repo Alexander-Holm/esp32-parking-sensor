@@ -38,7 +38,7 @@ impl <'a, TrigPin: OutputPin, EchoPin: InputPin> UltrasonicDistanceSensor<'a, Tr
         self.echo_start = Some(self.timer.now());
     }
 
-    pub fn read_distance(&mut self) -> Result<u64, SensorState> {
+    pub fn poll_distance(&mut self) -> Result<u64, SensorState> {
         if self.echo_start == None{
             return Err(SensorState::NotStarted);
         }

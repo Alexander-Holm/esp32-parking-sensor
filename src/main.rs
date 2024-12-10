@@ -74,7 +74,7 @@ fn main() -> ! {
     // Kolla hur lång tid det är kvar på sensorn och buzzern,
     // sätt sedan delay till det lägsta värdet.
     loop {        
-        match distance_sensor.read_distance() {            
+        match distance_sensor.poll_distance() {            
             Ok(distance) => {
                 distance_sensor.timer.start(SENSOR_POLLING_RATE_MS.millis());
                 let lit_led_count = LED_COUNT - (distance / (MAX_DISTANCE_CM / LED_COUNT));
