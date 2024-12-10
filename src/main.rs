@@ -23,7 +23,7 @@ mod simple_timer;
 use simple_timer::SimpleTimer;
 
 // u64 för att matcha typer från esp_hal
-const MAX_DISTANCE:u64 = 200;
+const MAX_DISTANCE_CM: u64 = 100;
 const LED_COUNT: u64 = 10;
 const SENSOR_POLLING_RATE_MS: u64 = 100;
 fn buzzer_off_interval(distance: u64) -> MicrosDurationU64 { (distance * 5).millis() }
@@ -40,18 +40,18 @@ fn main() -> ! {
     let timer = TimerGroup::new(peripherals.TIMG0, &clocks).timer0;
     
     let mut distance_sensor = UltrasonicDistanceSensor::new(
-        MAX_DISTANCE,
-        Output::new(pins.gpio1, Level::Low),
-        Input::new(pins.gpio0, Pull::Down), 
+        MAX_DISTANCE_CM,
+        Output::new(pins.gpio7, Level::Low),
+        Input::new(pins.gpio6, Pull::Down), 
         SimpleTimer::new(&timer),
         &clocks,
     );
 
     let mut led_bar = LedBar::new(
         LED_COUNT as u8, 
-        Output::new(pins.gpio7, Level::Low),
-        Output::new(pins.gpio9, Level::Low),
-        Output::new(pins.gpio8, Level::Low)
+        Output::new(pins.gpio2, Level::Low),
+        Output::new(pins.gpio1, Level::Low),
+        Output::new(pins.gpio0, Level::Low)
     );
     
     // Det går inte att lägga in pwm-objekten i Buzzer eller en egen klass.
@@ -60,7 +60,7 @@ fn main() -> ! {
     let mut pwm_controller = Ledc::new(peripherals.LEDC, &clocks);
     pwm_controller.set_global_slow_clock(LSGlobalClkSource::APBClk);
     let mut pwm_timer: Timer<LowSpeed> = pwm_controller.get_timer(ledc::timer::Number::Timer0);
-    let pwm_channel = pwm_controller.get_channel(ledc::channel::Number::Channel0, pins.gpio4);
+    let pwm_channel = pwm_controller.get_channel(ledc::channel::Number::Channel0, pins.gpio19);
     let mut buzzer = Buzzer::new(
         500.Hz(),
         SimpleTimer::new(&timer), 
@@ -77,7 +77,7 @@ fn main() -> ! {
         match distance_sensor.read_distance() {            
             Ok(distance) => {
                 distance_sensor.timer.start(SENSOR_POLLING_RATE_MS.millis());
-                let lit_led_count = LED_COUNT - (distance / (MAX_DISTANCE / LED_COUNT));
+                let lit_led_count = LED_COUNT - (distance / (MAX_DISTANCE_CM / LED_COUNT));
                 led_bar.light_leds(lit_led_count as u8);
                 if !buzzer.is_on() && !buzzer.timer.is_done() {
                     buzzer.timer.update_duration(buzzer_off_interval(distance));
